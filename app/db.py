@@ -29,3 +29,15 @@ def query_one(sql: str, params: tuple = ()):
     finally:
         cur.close()
         conn.close()
+
+def query_all(sql: str, params: tuple = ()):
+    conn = get_pool().get_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(sql, params)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+        

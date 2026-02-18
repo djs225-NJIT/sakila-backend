@@ -7,4 +7,7 @@ def create_app() -> Flask:
     from app.routes.health import health_bp
     app.register_blueprint(health_bp)
 
+    from app.routes.films import films_bp
+    app.register_blueprint(films_bp)
+
     return app
