@@ -1,9 +1,8 @@
 from flask import Flask
- 
+
 def create_app() -> Flask:
     app = Flask(__name__)
 
-    # Import and register blueprints (routes)
     from app.routes.health import health_bp
     app.register_blueprint(health_bp)
 
@@ -12,5 +11,8 @@ def create_app() -> Flask:
 
     from app.routes.customers import customers_bp
     app.register_blueprint(customers_bp)
+
+    from app.routes.actors import actors_bp
+    app.register_blueprint(actors_bp)
 
     return app

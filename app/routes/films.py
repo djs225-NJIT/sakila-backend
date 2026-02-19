@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.db import query_all
+from app.db import query_all, query_one
 
 films_bp = Blueprint("films", __name__)
 
@@ -36,3 +36,42 @@ def top_rented_films():
     rows = query_all(sql, (limit,))
     return jsonify(rows)
     #return jsonify({"count": len(rows), "results": rows})
+
+
+@films_bp.get("/api/films/<int:film_id>")
+def film_details(film_id: int):
+    film_sql = """
+    SELECT
+        f.film_id,
+        f.title,
+        f.description,
+        f.release_year,
+        f.rating,
+        f.length,
+        c.name AS category
+    FROM film f
+    LEFT JOIN film_category fc ON fc.film_id = f.film_id
+    LEFT JOIN category c ON c.category_id = fc.category_id
+    WHERE f.film_id = %s;
+    """
+    film = query_one(film_sql, (film_id,))
+    if film is None:
+        return jsonify({"error": "Film not found"}), 404
+
+    actors_sql = """
+    SELECT
+        a.actor_id,
+        a.first_name,
+        a.last_name
+    FROM film_actor fa
+    JOIN actor a ON a.actor_id = fa.actor_id
+    WHERE fa.film_id = %s
+    ORDER BY a.last_name, a.first_name;
+    """
+    film["actors"] = query_all(actors_sql, (film_id,))
+    return jsonify(film)
+
+
+
+
+
