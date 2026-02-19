@@ -10,4 +10,7 @@ def create_app() -> Flask:
     from app.routes.films import films_bp
     app.register_blueprint(films_bp)
 
+    from app.routes.actors import actors_bp
+    app.register_blueprint(actors_bp)
+
     return app
