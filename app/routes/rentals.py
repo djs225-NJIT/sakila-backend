@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.db import query_one, query_all
+from app.db import query_one, query_all, execute_write
 
 rentals_bp = Blueprint("rentals", __name__)
 
@@ -66,18 +66,58 @@ def create_rental():
     """
     # If your query_one/query_all wrappers don't support returning lastrowid,
     # we can fetch the created row by selecting the newest rental for that inv/customer.
-    query_all(insert_sql, (inventory_id, customer_id, staff_id))
+    rental_id = execute_write(insert_sql, (inventory_id, customer_id, staff_id))
 
-    created_sql = """
-    SELECT rental_id, rental_date, inventory_id, customer_id, return_date, staff_id, last_update
-    FROM rental
-    WHERE inventory_id = %s AND customer_id = %s AND return_date IS NULL
-    ORDER BY rental_date DESC
-    LIMIT 1;
-    """
-    created = query_one(created_sql, (inventory_id, customer_id))
+    created = query_one(
+        """
+        SELECT rental_id, rental_date, inventory_id, customer_id, return_date, staff_id, last_update
+        FROM rental
+        WHERE rental_id = %s
+        """,
+        (rental_id,)
+    )
 
     return jsonify({
         "message": "Rental created",
         "rental": created
     }), 201
+
+@rentals_bp.patch("/api/rentals/<int:rental_id>/return")
+def return_movie(rental_id):
+
+    # check rental exists
+    rental = query_one(
+        """
+        SELECT rental_id, return_date
+        FROM rental
+        WHERE rental_id = %s
+        """,
+        (rental_id,)
+    )
+
+    if not rental:
+        return jsonify({"error": "rental not found"}), 404
+
+    # can't return twice
+    if rental["return_date"] is not None:
+        return jsonify({"error": "movie already returned"}), 400
+
+    execute_write(
+        """
+        UPDATE rental
+        SET return_date = NOW()
+        WHERE rental_id = %s
+        """,
+        (rental_id,)
+    )
+
+    updated = query_one(
+        """
+        SELECT rental_id, rental_date, return_date
+        FROM rental
+        WHERE rental_id = %s
+        """,
+        (rental_id,)
+    )
+
+    return jsonify(updated)

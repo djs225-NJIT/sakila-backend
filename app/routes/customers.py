@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.db import query_all, query_one
+from app.db import query_all, query_one, execute_write
 
 customers_bp = Blueprint("customers", __name__)
 
@@ -95,6 +95,7 @@ def customer_details(customer_id):
     if not customer:
         return jsonify({"error": "customer not found"}), 404
 
+    # get customer rentals
     rentals = query_all(
         """
         SELECT r.rental_id, r.rental_date, r.return_date, f.film_id, f.title
@@ -111,3 +112,131 @@ def customer_details(customer_id):
         "customer": customer,
         "rentals": rentals
     })
+
+
+@customers_bp.put("/api/customers/<int:customer_id>")
+def update_customer(customer_id):
+    body = request.json
+
+    if body is None:
+        return jsonify({"error": "request body required"}), 400
+
+    first_name = body.get("first_name")
+    last_name = body.get("last_name")
+    email = body.get("email")
+    active = body.get("active")
+
+    # confirm customer exists
+    customer = query_one(
+        "SELECT customer_id FROM customer WHERE customer_id = %s",
+        (customer_id,)
+    )
+
+    
+    if not customer:
+        return jsonify({"error": "customer not found"}), 404
+
+    # require at least one field
+    if first_name is None and last_name is None and email is None and active is None:
+        return jsonify({"error": "no fields provided"}), 400
+
+    execute_write(
+        """
+        UPDATE customer
+        SET
+            first_name = COALESCE(%s, first_name),
+            last_name = COALESCE(%s, last_name),
+            email = COALESCE(%s, email),
+            active = COALESCE(%s, active)
+        WHERE customer_id = %s
+        """,
+        (first_name, last_name, email, active, customer_id)
+    )
+
+    updated = query_one(
+        """
+        SELECT customer_id, first_name, last_name, email, active, create_date
+        FROM customer
+        WHERE customer_id = %s
+        """,
+        (customer_id,)
+    )
+
+    return jsonify(updated)
+
+
+@customers_bp.delete("/api/customers/<int:customer_id>")
+def delete_customer(customer_id):
+
+    customer = query_one(
+        "SELECT customer_id FROM customer WHERE customer_id = %s",
+        (customer_id,)
+    )
+
+    if not customer:
+        return jsonify({"error": "customer not found"}), 404
+
+    # set active to 0 instead of deleting
+    execute_write(
+        """
+        UPDATE customer
+        SET active = 0
+        WHERE customer_id = %s
+        """,
+        (customer_id,)
+    )
+
+    return jsonify({"message": "customer deactivated"})
+
+@customers_bp.post("/api/customers")
+def create_customer():
+    body = request.json
+
+    if body is None:
+        return jsonify({"error": "request body required"}), 400
+
+    first_name = body.get("first_name")
+    last_name = body.get("last_name")
+    email = body.get("email")
+    store_id = body.get("store_id")
+    address_id = body.get("address_id")
+
+    # required fields
+    if not first_name or not last_name or not email or store_id is None or address_id is None:
+        return jsonify({"error": "All fields required"}), 400
+
+    # validate ids
+    try:
+        store_id = int(store_id)
+        address_id = int(address_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "store_id and address_id must be integers"}), 400
+
+    # confirm store exists
+    store = query_one("SELECT store_id FROM store WHERE store_id = %s", (store_id,))
+    if not store:
+        return jsonify({"error": "store not found"}), 404
+
+    # confirm address exists
+    address = query_one("SELECT address_id FROM address WHERE address_id = %s", (address_id,))
+    if not address:
+        return jsonify({"error": "address not found"}), 404
+
+    new_customer_id = execute_write(
+        """
+        INSERT INTO customer (store_id, first_name, last_name, email, address_id, active, create_date, last_update)
+        VALUES (%s, %s, %s, %s, %s, 1, NOW(), NOW())
+        """,
+        (store_id, first_name, last_name, email, address_id),
+    )
+
+    created = query_one(
+        """
+        SELECT customer_id, first_name, last_name, email, active, create_date
+        FROM customer
+        WHERE customer_id = %s
+        """,
+        (new_customer_id,),
+    )
+
+    return jsonify(created), 201

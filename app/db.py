@@ -40,4 +40,13 @@ def query_all(sql: str, params: tuple = ()):
         cur.close()
         conn.close()
 
-        
+def execute_write(sql: str, params: tuple = ()):
+    conn = get_pool().get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(sql, params)
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        cur.close()
+        conn.close()
