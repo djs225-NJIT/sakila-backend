@@ -15,4 +15,7 @@ def create_app() -> Flask:
     from app.routes.actors import actors_bp
     app.register_blueprint(actors_bp)
 
+    from app.routes.rentals import rentals_bp
+    app.register_blueprint(rentals_bp)
+
     return app
